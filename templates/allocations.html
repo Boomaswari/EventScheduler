@@ -1,0 +1,194 @@
+{% extends "base.html" %}
+
+{% block title %}Resource Allocations{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1><i class="bi bi-link"></i> Resource Allocations</h1>
+    <a href="{{ url_for('add_allocation') }}" class="btn btn-primary">
+        <i class="bi bi-plus-circle"></i> New Allocation
+    </a>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>Allocation ID</th>
+                        <th>Event</th>
+                        <th>Resource</th>
+                        <th>Time Period</th>
+                        <th>Duration</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for allocation in allocations %}
+                    {% set event = events_dict[allocation.event_id] %}
+                    {% set resource = resources_dict[allocation.resource_id] %}
+                    <tr>
+                        <td>{{ allocation.allocation_id }}</td>
+                        <td>
+                            <strong>{{ event.title }}</strong><br>
+                            <small class="text-muted">
+                                {% if event.description and event.description|length > 30 %}
+                                    {{ event.description[:30] }}...
+                                {% elif event.description %}
+                                    {{ event.description }}
+                                {% else %}
+                                    No description
+                                {% endif %}
+                            </small>
+                        </td>
+                        <td>
+                            {% if resource.resource_type == 'room' %}
+                                <span class="badge bg-primary">
+                            {% elif resource.resource_type == 'instructor' %}
+                                <span class="badge bg-success">
+                            {% elif resource.resource_type == 'equipment' %}
+                                <span class="badge bg-warning">
+                            {% else %}
+                                <span class="badge bg-info">
+                            {% endif %}
+                                {{ resource.resource_name }} ({{ resource.resource_type }})
+                            </span>
+                        </td>
+                        <td>
+                            {{ event.start_time.strftime('%Y-%m-%d %H:%M') }}<br>
+                            to {{ event.end_time.strftime('%H:%M') }}
+                        </td>
+                        <td>{{ ((event.end_time - event.start_time).total_seconds()/3600)|round(1) }}h</td>
+                        <td>
+                            {% set now = datetime.now() %}
+                            {% if event.start_time > now %}
+                            <span class="badge bg-info">Upcoming</span>
+                            {% elif event.start_time <= now and event.end_time >= now %}
+                            <span class="badge bg-warning">Ongoing</span>
+                            {% else %}
+                            <span class="badge bg-secondary">Completed</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <form action="{{ url_for('delete_allocation', allocation_id=allocation.allocation_id) }}" 
+                                  method="post" class="d-inline">
+                                <button type="submit" class="btn btn-sm btn-outline-danger" 
+                                        onclick="return confirm('Remove this allocation?')">
+                                    <i class="bi bi-trash"></i> Remove
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="7" class="text-center">No allocations found. 
+                            <a href="{{ url_for('add_allocation') }}">Create your first allocation!</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5>Resource Utilization Summary</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="resourceChart" width="400" height="300"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5>Quick Allocation</h5>
+            </div>
+            <div class="card-body">
+                <form action="{{ url_for('add_allocation') }}" method="POST">
+                    <div class="mb-3">
+                        <label class="form-label">Select Event</label>
+                        <select name="event_id" class="form-select" required>
+                            <option value="">Choose Event</option>
+                            {% for event in events %}
+                            <option value="{{ event.event_id }}">
+                                {{ event.title }} ({{ event.start_time.strftime('%m/%d %H:%M') }})
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Select Resource</label>
+                        <select name="resource_id" class="form-select" required>
+                            <option value="">Choose Resource</option>
+                            {% for resource in resources %}
+                            <option value="{{ resource.resource_id }}">
+                                {{ resource.resource_name }} ({{ resource.resource_type }})
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="bi bi-link"></i> Allocate Resource
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        let roomAllocations = 0;
+        let instructorAllocations = 0;
+        let equipmentAllocations = 0;
+        let otherAllocations = 0;
+        
+        const tableRows = document.querySelectorAll('table tbody tr');
+        tableRows.forEach(row => {
+            const resourceBadge = row.querySelector('.badge');
+            if (resourceBadge) {
+                const badgeText = resourceBadge.textContent;
+                if (badgeText.includes('room')) roomAllocations++;
+                else if (badgeText.includes('instructor')) instructorAllocations++;
+                else if (badgeText.includes('equipment')) equipmentAllocations++;
+                else otherAllocations++;
+            }
+        });
+
+        const ctx = document.getElementById('resourceChart').getContext('2d');
+        new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: ['Rooms', 'Instructors', 'Equipment', 'Other'],
+                datasets: [{
+                    data: [roomAllocations, instructorAllocations, equipmentAllocations, otherAllocations],
+                    backgroundColor: [
+                        '#007bff',
+                        '#28a745',
+                        '#ffc107',
+                        '#17a2b8'
+                    ]
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                    }
+                }
+            }
+        });
+    });
+</script>
+{% endblock %}

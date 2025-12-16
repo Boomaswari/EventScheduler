@@ -1,0 +1,31 @@
+{% macro render_field(field, rows=None) %}
+<div class="mb-3">
+    {{ field.label(class="form-label") }}
+    
+    {% if field.type == 'TextAreaField' %}
+        {% if rows %}
+            {{ field(class="form-control" + (" is-invalid" if field.errors else ""), rows=rows) }}
+        {% else %}
+            {{ field(class="form-control" + (" is-invalid" if field.errors else "")) }}
+        {% endif %}
+    {% elif field.type == 'SelectField' %}
+        {{ field(class="form-select" + (" is-invalid" if field.errors else "")) }}
+    {% elif field.type == 'DateField' or field.type == 'TimeField' %}
+        {{ field(class="form-control" + (" is-invalid" if field.errors else ""), type=field.type.lower().replace('field', '')) }}
+    {% else %}
+        {{ field(class="form-control" + (" is-invalid" if field.errors else "")) }}
+    {% endif %}
+    
+    {% if field.errors %}
+        <div class="invalid-feedback">
+            {% for error in field.errors %}
+                {{ error }}
+            {% endfor %}
+        </div>
+    {% endif %}
+    
+    {% if field.description %}
+        <div class="form-text">{{ field.description }}</div>
+    {% endif %}
+</div>
+{% endmacro %}

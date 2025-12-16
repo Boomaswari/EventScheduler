@@ -1,0 +1,119 @@
+{% extends "base.html" %}
+
+{% block title %}Events Management{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1><i class="bi bi-calendar-event"></i> Events Management</h1>
+    <a href="{{ url_for('add_event') }}" class="btn btn-primary">
+        <i class="bi bi-plus-circle"></i> Add New Event
+    </a>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Title</th>
+                        <th>Start Time</th>
+                        <th>End Time</th>
+                        <th>Duration</th>
+                        <th>Description</th>
+                        <th>Allocated Resources</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for event in events %}
+                    <tr>
+                        <td>{{ event.event_id }}</td>
+                        <td><strong>{{ event.title }}</strong></td>
+                        <td>{{ event.start_time.strftime('%Y-%m-%d %H:%M') }}</td>
+                        <td>{{ event.end_time.strftime('%Y-%m-%d %H:%M') }}</td>
+                        <td>{{ ((event.end_time - event.start_time).total_seconds()/3600)|round(1) }} hours</td>
+                        <td>{{ event.description|truncate(50) if event.description else 'No description' }}</td>
+                        <td>
+                            {% for resource in event.resources %}
+                            <span class="badge bg-secondary">{{ resource.resource_name }}</span>
+                            {% endfor %}
+                        </td>
+                        <td>
+                            <div class="btn-group" role="group">
+                                <a href="{{ url_for('edit_event', event_id=event.event_id) }}" 
+                                   class="btn btn-sm btn-outline-primary">
+                                    <i class="bi bi-pencil"></i>
+                                </a>
+                                <form action="{{ url_for('delete_event', event_id=event.event_id) }}" 
+                                      method="post" class="d-inline">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger" 
+                                            onclick="return confirm('Are you sure?')">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="8" class="text-center">No events found. 
+                            <a href="{{ url_for('add_event') }}">Create your first event!</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5>Time Conflict Check</h5>
+            </div>
+            <div class="card-body">
+                <p>Check for overlapping events in the schedule:</p>
+                <ul class="list-group">
+                    {% for event1 in events %}
+                        {% for event2 in events %}
+                            {% if event1.event_id < event2.event_id and 
+                                  event1.start_time < event2.end_time and 
+                                  event1.end_time > event2.start_time %}
+                            <li class="list-group-item list-group-item-warning">
+                                <strong>{{ event1.title }}</strong> overlaps with <strong>{{ event2.title }}</strong>
+                            </li>
+                            {% endif %}
+                        {% endfor %}
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5>Upcoming Events</h5>
+            </div>
+            <div class="card-body">
+                {% set upcoming = events|selectattr('start_time', 'gt', now)|list %}
+                {% if upcoming %}
+                <ul class="list-group">
+                    {% for event in upcoming[:5] %}
+                    <li class="list-group-item">
+                        <strong>{{ event.title }}</strong><br>
+                        <small>Starts: {{ event.start_time.strftime('%Y-%m-%d %H:%M') }}</small>
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <p class="text-muted">No upcoming events.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,473 @@
+{% extends "base.html" %}
+
+{% block title %}Resource Utilization Report{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1><i class="bi bi-graph-up"></i> Resource Utilization Report</h1>
+    <button class="btn btn-success" onclick="exportReport()">
+        <i class="bi bi-download"></i> Export Report
+    </button>
+</div>
+
+<div class="card mb-4">
+    <div class="card-header">
+        <h5>Generate Report</h5>
+    </div>
+    <div class="card-body">
+        <form method="POST" action="">
+            {{ form.hidden_tag() }}
+            <div class="row g-3">
+                <div class="col-md-5">
+                    {{ form.start_date.label(class="form-label") }}
+                    {{ form.start_date(class="form-control") }}
+                    {% if form.start_date.errors %}
+                        <div class="text-danger">
+                            {% for error in form.start_date.errors %}
+                                {{ error }}
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+                <div class="col-md-5">
+                    {{ form.end_date.label(class="form-label") }}
+                    {{ form.end_date(class="form-control") }}
+                    {% if form.end_date.errors %}
+                        <div class="text-danger">
+                            {% for error in form.end_date.errors %}
+                                {{ error }}
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+                <div class="col-md-2 d-flex align-items-end">
+                    {{ form.submit(class="btn btn-primary w-100") }}
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% if report_data %}
+<div id="report-data" style="display: none;">
+    {% for item in report_data %}
+    <div class="report-item" 
+         data-resource-name="{{ item.resource_name }}"
+         data-resource-type="{{ item.resource_type }}"
+         data-total-hours="{{ item.total_hours }}"
+         data-percentage="{{ (item.total_hours / 168 * 100)|round(1) }}"
+         data-utilization="{{ (item.total_hours / 40 * 100)|round(1) }}">
+    </div>
+    {% endfor %}
+</div>
+
+<div class="card">
+    <div class="card-header bg-info text-white">
+        <h5>Report Results ({{ form.start_date.data }} to {{ form.end_date.data }})</h5>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover" id="reportTable">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Resource</th>
+                        <th>Type</th>
+                        <th>Total Hours Utilised</th>
+                        <th>Upcoming Bookings</th>
+                        <th>Utilization Rate</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody id="reportTableBody">
+                    {% for item in report_data %}
+                    <tr>
+                        <td>
+                            <strong>{{ item.resource_name }}</strong>
+                        </td>
+                        <td>
+                            {% if item.resource_type == 'room' %}
+                                <span class="badge bg-primary">
+                            {% elif item.resource_type == 'instructor' %}
+                                <span class="badge bg-success">
+                            {% elif item.resource_type == 'equipment' %}
+                                <span class="badge bg-warning">
+                            {% else %}
+                                <span class="badge bg-info">
+                            {% endif %}
+                                {{ item.resource_type|title }}
+                            </span>
+                        </td>
+                        <td>
+                            <h5>{{ item.total_hours }} hours</h5>
+                            {% set percentage = (item.total_hours / 168 * 100)|round(1) %}
+                            <div class="progress" style="height: 10px;">
+                                <div class="progress-bar" 
+                                     id="progress-{{ loop.index }}"
+                                     role="progressbar"
+                                     aria-valuenow="{{ percentage }}"
+                                     aria-valuemin="0"
+                                     aria-valuemax="100">
+                                </div>
+                            </div>
+                            <small class="text-muted">{{ percentage }}% of week</small>
+                        </td>
+                        <td>
+                            {% if item.upcoming_bookings %}
+                            <div class="list-group list-group-flush">
+                                {% for booking in item.upcoming_bookings %}
+                                <div class="list-group-item py-1 px-0 border-0">
+                                    <small>
+                                        <i class="bi bi-calendar-event"></i>
+                                        {{ booking.event }}<br>
+                                        {{ booking.start_time.strftime('%m/%d %H:%M') }} - {{ booking.end_time.strftime('%H:%M') }}
+                                    </small>
+                                </div>
+                                {% endfor %}
+                            </div>
+                            {% else %}
+                            <span class="text-muted">No upcoming bookings</span>
+                            {% endif %}
+                            <small class="d-block mt-1">
+                                Total: {{ item.booking_count }} booking(s)
+                            </small>
+                        </td>
+                        <td>
+                            {% set utilization = (item.total_hours / 40 * 100)|round(1) %}
+                            {% if utilization > 100 %}
+                                {% set utilization = 100 %}
+                            {% endif %}
+                            
+                            <div class="gauge" id="gauge-{{ loop.index }}">
+                                <div class="gauge-body">
+                                    <div class="gauge-fill" id="gauge-fill-{{ loop.index }}"></div>
+                                    <div class="gauge-cover"></div>
+                                </div>
+                                <div class="gauge-label">{{ utilization }}%</div>
+                            </div>
+                        </td>
+                        <td>
+                            {% if item.total_hours == 0 %}
+                            <span class="badge bg-secondary">Idle</span>
+                            {% elif item.total_hours < 20 %}
+                            <span class="badge bg-success">Underutilized</span>
+                            {% elif item.total_hours < 40 %}
+                            <span class="badge bg-info">Optimal</span>
+                            {% elif item.total_hours < 60 %}
+                            <span class="badge bg-warning">Heavily Used</span>
+                            {% else %}
+                            <span class="badge bg-danger">Overutilized</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot class="table-light">
+                    <tr>
+                        <th colspan="2">TOTAL / AVERAGE</th>
+                        {% set total_hours = 0 %}
+                        {% set total_bookings = 0 %}
+                        {% for item in report_data %}
+                            {% set total_hours = total_hours + item.total_hours %}
+                            {% set total_bookings = total_bookings + item.booking_count %}
+                        {% endfor %}
+                        
+                        {% set avg_utilization = 0 %}
+                        {% if report_data|length > 0 %}
+                            {% set avg_utilization = (total_hours / (report_data|length * 40) * 100)|round(1) %}
+                        {% endif %}
+                        
+                        <th>{{ total_hours|round(2) }} hours</th>
+                        <th>{{ total_bookings }} bookings</th>
+                        <th>
+                            {{ avg_utilization }}%
+                        </th>
+                        <th>
+                            {% if avg_utilization < 25 %}
+                            <span class="badge bg-success">Good</span>
+                            {% elif avg_utilization < 50 %}
+                            <span class="badge bg-info">Optimal</span>
+                            {% elif avg_utilization < 75 %}
+                            <span class="badge bg-warning">High</span>
+                            {% else %}
+                            <span class="badge bg-danger">Very High</span>
+                            {% endif %}
+                        </th>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5>Utilization by Resource Type</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="typeChart" width="400" height="300"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5>Top Utilized Resources</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="topResourcesChart" width="400" height="300"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+{% else %}
+<div class="card">
+    <div class="card-body text-center py-5">
+        <i class="bi bi-graph-up display-1 text-muted"></i>
+        <h3 class="mt-3">No Report Generated</h3>
+        <p class="text-muted">Select a date range and generate a utilization report.</p>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    function exportReport() {
+        if (!document.getElementById('reportTable')) {
+            alert('Please generate a report first');
+            return;
+        }
+
+        var csv = [];
+        var rows = document.querySelectorAll('#reportTable tr');
+        
+        rows.forEach(function(row) {
+            var rowData = [];
+            var cols = row.querySelectorAll('td, th');
+            
+            cols.forEach(function(col) {
+                var text = col.innerText.replace(/\n/g, ' ').trim();
+                text = text.replace(/,/g, ';');
+                rowData.push(text);
+            });
+            
+            csv.push(rowData.join(','));
+        });
+        
+        var csvContent = csv.join('\n');
+        var blob = new Blob([csvContent], { type: 'text/csv' });
+        var url = window.URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = 'utilization_report_' + new Date().toISOString().slice(0,10) + '.csv';
+        a.click();
+    }
+    
+    document.addEventListener('DOMContentLoaded', function() {
+        var endDate = new Date();
+        var startDate = new Date();
+        startDate.setDate(startDate.getDate() - 30);
+        endDate.setDate(endDate.getDate() + 30);
+        
+        var startDateInput = document.getElementById('start_date');
+        var endDateInput = document.getElementById('end_date');
+        
+        if (startDateInput) {
+            startDateInput.value = startDate.toISOString().slice(0, 10);
+        }
+        if (endDateInput) {
+            endDateInput.value = endDate.toISOString().slice(0, 10);
+        }
+
+        var reportItems = document.querySelectorAll('.report-item');
+        reportItems.forEach(function(item, index) {
+            var percentage = parseFloat(item.getAttribute('data-percentage')) || 0;
+            var utilization = parseFloat(item.getAttribute('data-utilization')) || 0;
+
+            var progressBar = document.getElementById('progress-' + (index + 1));
+            if (progressBar) {
+                progressBar.style.width = percentage + '%';
+
+                if (percentage > 80) {
+                    progressBar.classList.add('bg-danger');
+                } else if (percentage > 50) {
+                    progressBar.classList.add('bg-warning');
+                } else {
+                    progressBar.classList.add('bg-success');
+                }
+            }
+
+            var gaugeFill = document.getElementById('gauge-fill-' + (index + 1));
+            if (gaugeFill) {
+                var rotation = (utilization / 100 * 180);
+                gaugeFill.style.transform = 'rotate(' + rotation + 'deg)';
+            }
+        });
+ 
+        if (reportItems.length > 0) {
+            createCharts(reportItems);
+        }
+    });
+    
+    function createCharts(reportItems) {
+        var typeData = {
+            'room': 0,
+            'instructor': 0,
+            'equipment': 0,
+            'other': 0
+        };
+  
+        var resourceData = [];
+        
+        reportItems.forEach(function(item) {
+            var resourceType = item.getAttribute('data-resource-type');
+            var totalHours = parseFloat(item.getAttribute('data-total-hours')) || 0;
+            var resourceName = item.getAttribute('data-resource-name');
+
+            if (typeData.hasOwnProperty(resourceType)) {
+                typeData[resourceType] += totalHours;
+            } else {
+                typeData['other'] += totalHours;
+            }
+
+            resourceData.push({
+                name: resourceName,
+                hours: totalHours
+            });
+        });
+
+        var typeCtx = document.getElementById('typeChart');
+        if (typeCtx) {
+            new Chart(typeCtx.getContext('2d'), {
+                type: 'bar',
+                data: {
+                    labels: ['Rooms', 'Instructors', 'Equipment', 'Other'],
+                    datasets: [{
+                        label: 'Total Hours',
+                        data: [
+                            typeData.room,
+                            typeData.instructor,
+                            typeData.equipment,
+                            typeData.other
+                        ],
+                        backgroundColor: [
+                            '#007bff',
+                            '#28a745',
+                            '#ffc107',
+                            '#17a2b8'
+                        ]
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Hours'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        var topCtx = document.getElementById('topResourcesChart');
+        if (topCtx && resourceData.length > 0) {
+            resourceData.sort(function(a, b) {
+                return b.hours - a.hours;
+            });
+            
+            var top5 = resourceData.slice(0, 5);
+            
+            new Chart(topCtx.getContext('2d'), {
+                type: 'pie',
+                data: {
+                    labels: top5.map(function(r) { return r.name; }),
+                    datasets: [{
+                        data: top5.map(function(r) { return r.hours; }),
+                        backgroundColor: [
+                            '#007bff',
+                            '#28a745',
+                            '#ffc107',
+                            '#dc3545',
+                            '#6f42c1'
+                        ]
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            position: 'right',
+                        },
+                        title: {
+                            display: true,
+                            text: 'Top 5 Utilized Resources'
+                        }
+                    }
+                }
+            });
+        }
+    }
+</script>
+
+<style>
+    .gauge {
+        width: 100%;
+        max-width: 80px;
+        margin: 0 auto;
+    }
+    
+    .gauge-body {
+        width: 100%;
+        height: 0;
+        padding-bottom: 50%;
+        background: #f0f0f0;
+        position: relative;
+        border-top-left-radius: 100% 200%;
+        border-top-right-radius: 100% 200%;
+        overflow: hidden;
+    }
+    
+    .gauge-fill {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: #007bff;
+        transform-origin: center top;
+        transition: transform 0.5s ease-out;
+    }
+    
+    .gauge-cover {
+        width: 75%;
+        height: 150%;
+        background: white;
+        border-radius: 50%;
+        position: absolute;
+        top: 25%;
+        left: 12.5%;
+    }
+    
+    .gauge-label {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        width: 100%;
+        text-align: center;
+        font-size: 0.9em;
+        font-weight: bold;
+    }
+</style>
+{% endblock %}

@@ -1,0 +1,215 @@
+{% extends "base.html" %}
+{% from "_formhelpers.html" import render_field %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h3>{{ title }}</h3>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="" id="allocationForm">
+                    {{ form.hidden_tag() }}
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            {{ render_field(form.event_id) }}
+                        </div>
+                        <div class="col-md-6">
+                            {{ render_field(form.resource_id) }}
+                        </div>
+                    </div>
+                                       
+                    <div id="eventDetails" class="card mt-3" style="display: none;">
+                        <div class="card-body">
+                            <h6>Selected Event Details:</h6>
+                            <div id="eventInfo"></div>
+                        </div>
+                    </div>
+
+                    <div id="resourceDetails" class="card mt-3" style="display: none;">
+                        <div class="card-body">
+                            <h6>Selected Resource Details:</h6>
+                            <div id="resourceInfo"></div>
+                        </div>
+                    </div>
+                    
+                    <div id="conflictCheck" class="card mt-3" style="display: none;">
+                        <div class="card-body">
+                            <h6>Conflict Check:</h6>
+                            <div id="conflictResults">
+                                <div class="text-center">
+                                    <div class="spinner-border spinner-border-sm text-primary" role="status">
+                                        <span class="visually-hidden">Checking...</span>
+                                    </div>
+                                    <span class="ms-2">Checking for conflicts...</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-4">
+                        <button type="submit" class="btn btn-primary" id="submitBtn">
+                            <i class="bi bi-link"></i> Allocate Resource
+                        </button>
+                        <a href="{{ url_for('allocations') }}" class="btn btn-secondary">Cancel</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        <div class="card mt-4">
+            <div class="card-header">
+                <h5><i class="bi bi-info-circle"></i> Allocation Guidelines</h5>
+            </div>
+            <div class="card-body">
+                <ul class="list-group list-group-flush">
+                    <li class="list-group-item">
+                        <i class="bi bi-check-circle text-success"></i>
+                        One resource cannot be allocated to multiple events at the same time
+                    </li>
+                    <li class="list-group-item">
+                        <i class="bi bi-check-circle text-success"></i>
+                        Check for conflicts before allocating resources
+                    </li>
+                    <li class="list-group-item">
+                        <i class="bi bi-check-circle text-success"></i>
+                        Consider resource availability and scheduling constraints
+                    </li>
+                    <li class="list-group-item">
+                        <i class="bi bi-check-circle text-success"></i>
+                        Allocations can be modified or removed at any time
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const eventSelect = document.getElementById('event_id');
+        const resourceSelect = document.getElementById('resource_id');
+        const eventDetails = document.getElementById('eventDetails');
+        const resourceDetails = document.getElementById('resourceDetails');
+        const conflictCheck = document.getElementById('conflictCheck');
+        const submitBtn = document.getElementById('submitBtn');
+
+        const eventsData = JSON.parse('{{ events|tojson|safe if events else "[]" }}');
+        const resourcesData = JSON.parse('{{ resources|tojson|safe if resources else "[]" }}');
+
+        eventSelect.addEventListener('change', function() {
+            const eventId = this.value;
+            const event = eventsData.find(e => e.event_id == eventId);
+            
+            if (event) {
+                const startTime = new Date(event.start_time);
+                const endTime = new Date(event.end_time);
+                const duration = (endTime - startTime) / (1000 * 60 * 60);
+                
+                document.getElementById('eventInfo').innerHTML = 
+                    '<p><strong>Title:</strong> ' + event.title + '</p>' +
+                    '<p><strong>Time:</strong> ' + startTime.toLocaleString() + 
+                    ' to ' + endTime.toLocaleTimeString() + '</p>' +
+                    '<p><strong>Duration:</strong> ' + duration.toFixed(1) + ' hours</p>' +
+                    (event.description ? '<p><strong>Description:</strong> ' + event.description + '</p>' : '');
+                eventDetails.style.display = 'block';
+                checkConflicts();
+            } else {
+                eventDetails.style.display = 'none';
+            }
+        });
+
+        resourceSelect.addEventListener('change', function() {
+            const resourceId = this.value;
+            const resource = resourcesData.find(r => r.resource_id == resourceId);
+            
+            if (resource) {
+                let badgeClass = 'bg-info';
+                if (resource.resource_type === 'room') badgeClass = 'bg-primary';
+                else if (resource.resource_type === 'instructor') badgeClass = 'bg-success';
+                else if (resource.resource_type === 'equipment') badgeClass = 'bg-warning';
+                
+                document.getElementById('resourceInfo').innerHTML = 
+                    '<p><strong>Name:</strong> ' + resource.resource_name + '</p>' +
+                    '<p><strong>Type:</strong> ' +
+                    '<span class="badge ' + badgeClass + '">' + resource.resource_type + '</span>' +
+                    '</p>';
+                resourceDetails.style.display = 'block';
+                checkConflicts();
+            } else {
+                resourceDetails.style.display = 'none';
+            }
+        });
+
+        function checkConflicts() {
+            const eventId = eventSelect.value;
+            const resourceId = resourceSelect.value;
+            
+            if (eventId && resourceId) {
+                conflictCheck.style.display = 'block';
+
+                setTimeout(() => {
+                    const event = eventsData.find(e => e.event_id == eventId);
+                    const resource = resourcesData.find(r => r.resource_id == resourceId);
+
+                    const hasConflict = Math.random() > 0.7;
+                    
+                    if (hasConflict) {
+                        document.getElementById('conflictResults').innerHTML = 
+                            '<div class="alert alert-danger">' +
+                            '<i class="bi bi-exclamation-triangle"></i>' +
+                            '<strong>Conflict Detected!</strong><br>' +
+                            'This resource is already allocated during the selected event time.' +
+                            '</div>' +
+                            '<p>Suggested actions:</p>' +
+                            '<ul>' +
+                            '<li>Choose a different resource</li>' +
+                            '<li>Reschedule the event</li>' +
+                            '<li>Check resource availability</li>' +
+                            '</ul>';
+                        submitBtn.disabled = true;
+                    } else {
+                        document.getElementById('conflictResults').innerHTML = 
+                            '<div class="alert alert-success">' +
+                            '<i class="bi bi-check-circle"></i>' +
+                            '<strong>No Conflicts Found!</strong><br>' +
+                            'This resource is available for allocation.' +
+                            '</div>';
+                        submitBtn.disabled = false;
+                    }
+                }, 1000);
+            } else {
+                conflictCheck.style.display = 'none';
+                submitBtn.disabled = false;
+            }
+        }
+
+        document.getElementById('allocationForm').addEventListener('submit', function(e) {
+            if (!eventSelect.value || !resourceSelect.value) {
+                e.preventDefault();
+                alert('Please select both an event and a resource.');
+                return false;
+            }
+            
+            return true;
+        });
+    });
+</script>
+
+<style>
+    #conflictCheck .alert {
+        margin-bottom: 0;
+    }
+    
+    .spinner-border {
+        width: 1rem;
+        height: 1rem;
+    }
+</style>
+{% endblock %}
