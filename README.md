@@ -73,5 +73,5 @@ A Flask-based web application for managing events and allocating resources with 
 
 1. Clone the repository:
 ```bash
-git clone <repository-url>
-cd event_scheduler
+git clone https://github.com/Boomaswari/EventScheduler.git
+cd EventScheduler
